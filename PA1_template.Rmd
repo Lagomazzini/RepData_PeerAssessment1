@@ -10,16 +10,176 @@ output:
 
 
 
-## What is mean total number of steps taken per day?
+We read the file activity.csv and stored it into a df variable  
 
+```{r readData, echo = TRUE, cache = TRUE}
+df <- read.csv("activity.csv", head = TRUE)
+head(df)
+```
 
+## What is mean total number of steps taken per day?  
+
+Here we load the required packages
+```{r packages, echo = FALSE, results = "hide"}
+library(dplyr)
+library(tidyr)
+
+```
+
+Now the total number of steps al calculated removing the NA values
+
+```{r sumSteps, cache = TRUE}
+df_2 <- df%>%
+        group_by(date)%>%
+        summarise(total_Steps= sum(steps, na.rm = TRUE))
+
+library(knitr)
+kable(df_2, format = "html")
+
+```
+
+A histogram of the total number of steps per day is made.
+```{r }
+hist(df_2$total_Steps, breaks = 10 , xlab = "Total Steps per Day", 
+     main = "Frequency of Total Steps")
+
+```
+
+The mean and median value of the *number of steps per day* is:  
+
+- mean =   `r mean(df_2$total_Steps)`  
+
+- median = `r median(df_2$total_Steps)`
 
 ## What is the average daily activity pattern?
+
+1. Series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)  
+
+```{r seriesplot, cache = TRUE}
+df_3 <- df[!is.na(df$steps),]%>%
+        mutate(  interval = interval*0.01)%>%
+        mutate(interval = format(interval, nsmall = 2))%>%
+        select(interval, steps)%>%
+        group_by(interval)%>%
+        summarise(mean_steps= mean(steps))
+df_3$interval <- strptime(df_3$interval, "%H.%M")
+
+with(df_3, plot(interval, mean_steps, type="l",
+                main = "Average Daily Activity Pattern",
+                xlab = "time interval (min.)",
+                ylab = "steps average"))
+```
+
+2. Maximum value of the number of steps on daily average is `r max(df_3$mean_steps)`.
+The time interval corresponding to the maximum of daily steps average is:
+```{r }
+x <- df_3$interval[max(df_3$mean_steps)]
+x <- as.character(x)
+sub("([0-9]+-[0-9]+){1,3}","",x)
+
+```
+
 
 
 
 ## Imputing missing values
 
+1. Calculating the number of NA in the dataframe:
+
+```{r number NA}
+a <- df$steps
+
+```
+
+number of NA: `r length(a[is.na(a)])`
+
+2. Filling the NA values with the mean of 5-min interval calculated previously
+The previous original df data frame is used
+```{r fillNAsteps, cache = TRUE}
+df_4 <- df[!is.na(df$steps),]%>%
+        select( interval, steps)%>%
+        group_by(interval)%>%
+        summarise(mean_steps= mean(steps))
+
+df_5 <- merge(df, df_4, by.x = "interval", by.y = "interval")
+df_5 <- df_5%>%
+        arrange(date, interval)%>%
+        select(date, interval, steps, mean_steps)
+for (i in 1:length(df_5$date)){
+        if(is.na(df_5$steps[i])){
+                df_5$steps[i]<-df_5$mean_steps[i]
+        }
+}
+
+
+```
+3. Creating a new dataset similar to the original but with NA filled in.
+
+
+
+```{r ,cache=TRUE}
+df_5 <- select(df_5, steps, date, interval)
+head(df_5)
+```
+
+4. Creating a histogram as the previous one of frequency of Total Steps per Day
+
+
+```{r , cache = TRUE}
+df_6 <- df_5%>%
+        group_by(date)%>%
+        summarise(total_Steps= sum(steps, na.rm = TRUE))
+
+library(knitr)
+kable(df_6, format = "html")
+
+```
+  
+  
+A histogram of the total number of steps per day is made as before.
+
+```{r, cache = TRUE}
+hist(df_6$total_Steps, breaks = 10 , xlab = "Total Steps per Day", 
+     main = "Frequency of Total Steps")
+
+```
+
+The mean and median value of the *number of steps per day* is:  
+
+- mean =   `r mean(df_6$total_Steps)/10000` x 10^4  
+
+- median = `r median(df_6$total_Steps)/10000` x 10^4
+
+As it can be seen, an introduction of NA values make changes in the dataset and hence, the mean and the median value.  
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+1. Here a new factor variable for the filled NA dataset is create. The factor distinguish between "weekday" and "weekend".
+```{r , cache = TRUE}
+df_7 <- df_5%>%
+        mutate(type_day = weekdays(as.Date(date)))
+for(i in 1:length(df_7$interval)){
+        if(df_7$type_day[i]=="sábado" |df_7$type_day[i]=="domingo" ){
+                df_7$type_day[i]<-"weekend"
+        }
+        else{df_7$type_day[i] <- "weekday"}
+}
+head(df_7,10)
+```
+
+2. Creating a dataframe for plotting the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+```{r cache = TRUE}
+df_7 <- df_7%>%
+        group_by(interval, type_day)%>%
+        summarise(mean_steps = mean(steps))%>%
+        mutate(type_day = as.factor(type_day))%>%
+        arrange(mean_steps, type_day)
+
+```
+2. Creating a panel plot 
+```{r}
+library(lattice)
+xyplot(mean_steps ~ interval  | type_day, data = df_7, layout = c(1,2),
+       xlab = "Interval", ylab= "Number of steps", type="l")      
+
+```
